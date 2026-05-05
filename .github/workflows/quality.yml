@@ -1,0 +1,124 @@
+name: GL Microsite Quality
+
+# Reusable workflow — call from any microsite fork via:
+#
+#   jobs:
+#     quality:
+#       uses: grow-lead-agency/gl-microsite-ci/.github/workflows/quality.yml@v1
+#       with:
+#         dist: dist           # default: dist
+#         build: 'bun run build'  # default
+#         node-version: '20'
+#         bun-version: '1.3.0'
+
+on:
+  workflow_call:
+    inputs:
+      dist:
+        description: 'dist directory after build'
+        required: false
+        type: string
+        default: 'dist'
+      build:
+        description: 'build command (set to empty to skip — already-built dist/ assumed)'
+        required: false
+        type: string
+        default: 'bun run build'
+      bun-version:
+        required: false
+        type: string
+        default: '1.3.0'
+      ci-ref:
+        description: 'gl-microsite-ci ref to use (tag/branch/sha)'
+        required: false
+        type: string
+        default: 'v1'
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout caller repo
+        uses: actions/checkout@v4
+
+      - name: Checkout gl-microsite-ci
+        uses: actions/checkout@v4
+        with:
+          repository: grow-lead-agency/gl-microsite-ci
+          ref: ${{ inputs.ci-ref }}
+          path: .gl-microsite-ci
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ inputs.bun-version }}
+
+      - name: Install caller deps
+        run: bun install --frozen-lockfile
+
+      - name: Install gl-microsite-ci deps
+        working-directory: .gl-microsite-ci
+        run: bun install --frozen-lockfile
+
+      - name: Build site
+        if: ${{ inputs.build != '' }}
+        run: ${{ inputs.build }}
+
+      - name: Run quality checks
+        id: quality
+        run: |
+          bun .gl-microsite-ci/scripts/quality.ts \
+            --dist=${{ inputs.dist }} \
+            --project=. \
+            --json=.quality-report.json \
+            --md=.quality-comment.md
+        continue-on-error: false
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gl-quality-report
+          path: |
+            .quality-report.json
+            .quality-comment.md
+          retention-days: 30
+
+      - name: Comment on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body;
+            try {
+              body = fs.readFileSync('.quality-comment.md', 'utf8');
+            } catch (e) {
+              body = '⚠️ gl-quality run did not produce a report. Check workflow logs.';
+            }
+            const marker = '<!-- gl-microsite-ci:report -->';
+            body = marker + '\n' + body;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find((c) => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
