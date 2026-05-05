@@ -51,6 +51,16 @@ jobs:
           ref: ${{ inputs.ci-ref }}
           path: .gl-microsite-ci
 
+      # Astro 6+ spawns Node child processes (astro check, astro build) and
+      # requires Node >= 22.12. Default GitHub runner ships Node 20, which
+      # Astro rejects with "Node.js v20 is not supported by Astro!" Bun setup
+      # alone doesn't satisfy this — Astro forks Node, not Bun. Without this
+      # step, callers fail at the Build site step on every run.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
