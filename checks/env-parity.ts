@@ -51,8 +51,10 @@ export async function checkEnvParity(projectRoot: string): Promise<CheckResult> 
     }
   }
 
-  // Built-in/framework vars that don't need to be in .env.example
+  // Built-in/framework/tooling vars that don't need to be in .env.example.
+  // Override per-project via `.gl-quality.json` { "envParity": { "ignore": ["MY_VAR"] } }
   const builtins = new Set([
+    // Node + Vite + Astro framework vars
     "NODE_ENV",
     "MODE",
     "DEV",
@@ -61,8 +63,32 @@ export async function checkEnvParity(projectRoot: string): Promise<CheckResult> 
     "BASE_URL",
     "ASSETS_PREFIX",
     "PUBLIC_URL",
+    // CI providers
     "CI",
+    "GITHUB_ACTIONS",
+    "GITHUB_TOKEN",
+    "GITHUB_REPOSITORY",
+    // Common dev/tooling-only flags (not production config)
+    "DEBUG",
+    "VERBOSE",
+    "QUIET",
+    "AUDIT_MODE",
+    "DRY_RUN",
+    "FORCE",
+    "SKIP_BUILD",
   ]);
+
+  // Per-project overrides via .gl-quality.json
+  try {
+    const cfgPath = join(projectRoot, ".gl-quality.json");
+    const cfg = await readFileSafe(cfgPath);
+    if (cfg) {
+      const parsed = JSON.parse(cfg) as { envParity?: { ignore?: string[] } };
+      for (const v of parsed.envParity?.ignore ?? []) builtins.add(v);
+    }
+  } catch {
+    /* ignore malformed config */
+  }
 
   const missingFromExample = [...used].filter(
     (v) => !declared.has(v) && !builtins.has(v) && !v.startsWith("PUBLIC_"),
