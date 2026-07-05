@@ -1,0 +1,19 @@
+.github/workflows/quality.yml
+  s_e1facc73f270b8::t_3b1bda592d750a 45,48,60,65,92,102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "1141da55b87473c1cfd626f962c36a71d20f4835",
+  "prompts": {},
+  "sessions": {
+    "s_e1facc73f270b8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5113162b-bca7-422e-86c6-5d6db8e95b57",
+        "model": "unknown"
+      },
+      "human_author": "Petr Rohan <petr.a.rohan@gmail.com>"
+    }
+  }
+}
